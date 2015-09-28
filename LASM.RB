@@ -46,25 +46,11 @@ def checkFlag str, flg
 	return false
 end
 
-def nasm_addressHexJump file, hex
-	file.print "	JMP [#{hex}h]\n"
-	return "	JMP [#{hex}h]\n"
-end
-
-def nasm_addressJump file, address
-	file.print "	JMP [#{address}]\n"
-	return "	JMP [#{address}]\n"
-end
-
-def nasm_literalHexJump file, hex
-	file.print "	JMP #{hex}h\n"
-	return "	JMP #{hex}h\n"
-end
-
-def nasm_literalJump file, literal
-	file.print "	JMP #{literal}\n"
-	return "	JMP #{literal}\n"
-end
+#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+#=============================================================================|
+#								  INIT SCRIPT
+#=============================================================================|
+#//////////////////////////////////////////////////////////////////////////////
 
 print "The Literate Assembler (LASM) v1.1.2015\n"
 print "Please give me a file to compile: "
@@ -95,12 +81,77 @@ outLang = gets.chomp.strip
 if outLang == ""
 	outLang = "nasm"
 elsif outLang == "nasm"
-	outLang == "nasm"
+elsif outLang == "dasm"
 else
 	print "Sorry, that language is not supported!\n"
 	exit
 end
 
+#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+#=============================================================================|
+#								NASM FUNCTIONS
+#=============================================================================|
+#//////////////////////////////////////////////////////////////////////////////
+if outLang == "nasm"
+	asmName = "NASM:\n"
+	def addressHexJump file, hex
+		file.print "	JMP [#{hex}h]\n"
+		return "	JMP [#{hex}h]\n"
+	end
+
+	def addressJump file, address
+		file.print "	JMP [#{address}]\n"
+		return "	JMP [#{address}]\n"
+	end
+
+	def literalHexJump file, hex
+		file.print "	JMP #{hex}h\n"
+		return "	JMP #{hex}h\n"
+	end
+
+	def literalJump file, literal
+		file.print "	JMP #{literal}\n"
+		return "	JMP #{literal}\n"
+	end
+
+	def addressMarker file, address
+		file.print "#{address}:"
+		return "#{address}:"
+	end
+end
+
+#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+#=============================================================================|
+#								DASM FUNCTIONS
+#=============================================================================|
+#//////////////////////////////////////////////////////////////////////////////
+if outLang == "dasm"
+	asmName = "DASM:\n"
+	def addressHexJump file, hex
+		file.print "	JMP ($#{hex})\n"
+		return "	JMP ($#{hex})\n"
+	end
+
+	def addressJump file, address
+		file.print "	JMP (#{address})\n"
+		return "	JMP (#{address})\n"
+	end
+
+	def literalHexJump file, hex
+		file.print "	JMP $#{hex}\n"
+		return "	JMP $#{hex}\n"
+	end
+
+	def literalJump file, literal
+		file.print "	JMP #{literal}\n"
+		return "	JMP #{literal}\n"
+	end
+
+	def addressMarker file, address
+		file.print "#{address}:"
+		return "#{address}:"
+	end
+end
 flags = setFlag outLang, flags
 
 outFileName = "#{fileName}.asm"
@@ -116,6 +167,12 @@ end
 outFile = File.new outFileName, "w"
 line = 1
 readLine = inFile.gets.chomp.gsub(/\s+/, "")
+
+#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+#=============================================================================|
+#								   COMPILER
+#=============================================================================|
+#//////////////////////////////////////////////////////////////////////////////
 
 while readLine != "$EOF"
 	print "LINE #{line}: #{readLine} "
@@ -144,19 +201,35 @@ while readLine != "$EOF"
 		else
 			print "(flag #{readLine[3 .. readLine.length]} is set)\n"
 		end
+	elsif readLine[0 .. 3] == '$raw'
+		endCount = 1
+		while endCount > 0
+			readLine = inFile.gets.chomp
+			line += 1
+			if readLine[0 .. 2].gsub(/\s+/, "") == '$if' || readLine[0 .. 3].gsub(/\s+/, "") == '$raw'
+				endCount += 1
+			elsif readLine[0 .. 3].gsub(/\s+/, "") == '$end'
+				endCount -= 1
+			else
+				outFile.puts readLine
+			end
+		end
+		print "(copied raw code to output)\n"
 	elsif readLine[0 .. 3] == '$end'
 		print "(end marker ignored)\n"
-	elsif readLine[0 .. 3] == 'jump' && outLang == "nasm"
-		print "NASM:\n"
-		if readLine [4 .. 5] == '@h' || readLine [4 .. 5] == 'h@'
-			print nasm_addressHexJump outFile, readLine [6 .. readLine.length]
+	elsif readLine[0 .. 3] == 'jump'
+		print asmName
+		if readLine [4 .. 5] == '@#' || readLine [4 .. 5] == '#@'
+			print addressHexJump outFile, readLine [6 .. readLine.length]
 		elsif readLine [4] == '@'
-			print nasm_addressJump outFile, readLine [5 .. readLine.length]
-		elsif readLine [4] == 'h'
-			print nasm_literalHexJump outFile, readLine [5 .. readLine.length]
+			print addressJump outFile, readLine [5 .. readLine.length]
+		elsif readLine [4] == '#'
+			print literalHexJump outFile, readLine [5 .. readLine.length]
 		else
-			print nasm_literalJump outFile, readLine [4 .. readLine.length]
+			print literalJump outFile, readLine [4 .. readLine.length]
 		end
+	elsif readLine[0] == ':'
+		print "(#{addressMarker outFile, readLine[1 .. readLine.length]})\n"
 	else
 		print "(gibberish, ignoring)\n"
 	end
@@ -164,9 +237,15 @@ while readLine != "$EOF"
 	line += 1
 end
 
+#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+#=============================================================================|
+#								  EXIT SCRIPT
+#=============================================================================|
+#//////////////////////////////////////////////////////////////////////////////
+
 print "#{line} lines were compiled!\n"
 print "The flags #{flags} where flagged!\n"
 inFile.close
 outFile.close
-print "LASM is done!\a\n"
+print "LASM is done!\n"
 exit

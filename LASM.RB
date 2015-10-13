@@ -1,4 +1,5 @@
-b = 1 # "Build"
+#!/usr/bin/env ruby
+b = 2 # Version
 y = 2015 # Year
 #^The version
 
@@ -6,45 +7,152 @@ y = 2015 # Year
 
 #The Public File License (see https://github.com/Gip-Gip/PFL for info)
 
-#Copyright Charles "Gip-Gip" Thompson, September 25th, 2015
+#Copyright Charles "Gip-Gip" Thompson, October 12th, 2015
 
 #In this case, a file is a group of digital data that can be transferred and
 #used.
 
 #The copyright holder of the file LASM.RB has declared that the file and
 #everything taken from it, unless stated otherwise, is free for any use by any
-#one, with the exception of preventing the free use of the unmodified file
-#and/or the unmodified file's derivatives, including but not limited
-#to patenting and/or claiming further copyright on the unmodified file and/or
-#the unmodified file's derivatives.
+#one, with the exception of preventing the free use of the unmodified file, 
+#including but not limited to patenting and/or claiming further copyright on
+#the unmodified file.
 
 #THE FILE LASM.RB IS PROVIDED WITHOUT ANY WARRANTY OR GUARANTEE AT ALL. THE
 #AUTHOR(S) ARE NOT LIABLE FOR CLAIMS, DAMAGES, OR REALLY ANYTHING ELSE IN
 #CONNECTION TO THIS FILE, UNLESS EXPLICITLY STATED OTHERWISE.
 
 
-flags = Array.new(0) # The array used for keeping track of flags
-markerCount = 0 # The variable that keeps track of the amount of markers made
+#MARK: SYMBOLS
 
-def setFlag str, flg
-	safeFlg = flg
+$MARKER = 0
+$ENDMARKER = 1
+
+$args = ARGV # The command line arguments, aliased to the global $args
+
+$assembler = "nasm" # The default output format
+
+$source = nil # The global for the source file
+$output = nil # The global for the output file
+
+$verbose = false
+$skip = false
+
+$flags = Array.new 0
+
+$time = Time.new
+
+$usage = "\n\
+USAGE:\n\
+(ruby) ./lasm.rb in.file (arguments)\n\
+\n\
+ARGUMENTS:\n\
+-a assembler, --assembler assembler = Specify the assembler to use.\n\
+-f flag, --flag flag = Set a flag.\n\
+-h, --help = Display this message and exit.\n\
+-o out.file, --out out.file = Provide the output file's name.\n\
+-s, --skip = Answer yes to all questions\n\
+-v, --verbose = Display all messages\n\
+\n"
+
+$duck = "\n\
+    ____ \n\
+ __/*   \\________ \n\
+/__              \\ \n\
+   |              | \n\
+   \\_____________/ \n\
+\n\
+RETARD PUFFIN NUFF \n\
+\n\
+\n"
+
+$done = "\n\
+LASM is done! Continue with your day...\n\
+\n"
+
+#MARK: FUNCTIONS
+
+def beep
+	print "\a"
+end
+
+def help
+	puts $usage
+	exit
+end
+
+def seperate
+	print "\n\n\n"
+end
+
+def log str
+	if $logFile != nil
+		$logFile.print str
+	end
+	if $verbose == true
+		print str
+	end
+end
+
+def formatLine str
+	str = str.chomp.gsub(/\s+/, "").downcase
+	commentDepth = 0
+	while str[commentDepth] != ';' and commentDepth < str.length
+		commentDepth += 1
+	end
+	if commentDepth == str.length
+		return str
+	else
+		return str[0 .. commentDepth - 1]
+	end
+end
+
+def checkMarker str
+	stats = Array.new(2)
+	if str[0] == '$'
+		stats[$MARKER] = true
+	end
+	
+	if str[1 .. 3] == 'end' or str[1 .. 4] == 'else'
+		stats[$ENDMARKER] = true
+	elsif str[1 .. 4] == 'flag'
+		stats[$ENDMARKER] = nil
+	else
+		stats[$ENDMARKER] = false
+	end
+	return stats
+end
+
+def replaceExt str, ext
+	extDepth = str.length
+	while str[extDepth] != '.' and extDepth > 0
+		extDepth -= 1
+	end
+	if extDepth == 0
+		extDepth = str.length
+	end
+	return "#{str[0 ... extDepth]}#{ext}"
+end
+
+def setFlag str
+	safeFlags = $flags
 	flagCursor = 0
-	while flagCursor < flg.length
-		if flg[flagCursor] == str
+	while flagCursor < $flags.length
+		if $flags[flagCursor] == str
 			return false
 		end
 		flagCursor += 1
 	end
-	flg = Array.new flg.length + 1
-	flg[0 ... flg.length] = safeFlg
-	flg[flg.length] = str
-	return flg
+	$flags = Array.new $flags.length + 1
+	$flags[0 ... $flags.length] = safeFlags
+	$flags[$flags.length] = str
+	return true
 end
 
-def checkFlag str, flg
+def checkFlag str
 	flagCursor = 0
-	while flagCursor < flg.length
-		if flg[flagCursor] == str
+	while flagCursor <= $flags.length
+		if $flags[flagCursor] == str
 			return true
 		end
 		flagCursor += 1
@@ -52,489 +160,277 @@ def checkFlag str, flg
 	return false
 end
 
-def lineLength line
-	character = 0
-	while line[character] != ';' && character <= line.length
-		character += 1
-	end
-	return character - 1
+#MARK: INIT SCRIPT
+
+puts "the Literate ASseMbler(LASM) #{b}.#{y} is under the PFL. See LICENSE.TXT"
+
+if $args.length == 0
+	help
 end
 
-def seperatorDepth line, seperator
-	character = 0
-	while line[character] != seperator && character <= line.length
-		character += 1
+#MARK: ARGUMENT READER
+
+puts "LASM is reading your arguments... "
+
+argCounter = -1
+
+while argCounter < $args.length
+	argCounter += 1
+	if $args[argCounter] == "-a" or $args[argCounter] == "--assembler"
+		argCounter += 1
+		puts "Will check for #{$args[argCounter]} support!"
+	elsif $args[argCounter] == "-d" or $args[argCounter] == "--duck"
+		puts $duck
+		exit
+	elsif $args[argCounter] == "-h" or $args[argCounter] == "--help"
+		help
+	elsif $args[argCounter] == "-f" or $args[argCounter] == "--flag"
+		argCounter += 1
+		flagSet = setFlag $args[argCounter]
+		if flagSet == false
+			puts "#{$args[argCounter]} is already flagged!"
+		else
+			puts "Flag #{$args[argCounter]} is now set!"
+		end
+	elsif $args[argCounter] == "-o" or $args[argCounter] == "--out"
+		argCounter += 1
+		$output = $args[argCounter]
+		puts "Will try to write the output to #{$output}!"
+	elsif $args[argCounter] == "-l" or $args[argCounter] == "--log"
+		argCounter += 1
+		$logName = $args[argCounter]
+		puts "Will try to log all events to #{$log}!"
+	elsif $args[argCounter] == "-s" or $args[argCounter] == "--skip"
+		$skip = true
+		puts "Will skip all Y/N questions!"
+	elsif $args[argCounter] == "-v" or $args[argCounter] == "--verbose"
+		$verbose = true
+		puts "Verbose is enabled! Prepared for a flooded console..."
+	elsif $args[argCounter] != nil
+		$source = $args[argCounter]
+		puts "Will try to use the file #{$source} to compile!"
 	end
-	return character - 1
 end
 
-def finish
-	print "Done! Do you want any help (y/n)? "
-	helpYN = gets.chomp
-	if helpYN == "y" || helpYN == "Y"
-		print "SUPPORTED OUTPUT:\n\
-\n\
-dasm - generates 6502 code for DASM\n\
-\n\
-nasm - generates 16 bit code for NASM assemblers\n\
-nasm32 - generate 32 bit code for NASM\n"
-	end
+if $source == nil
+	help
+end
 
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# Check if we're on unix(SH check)...
-#////////////////////////////////////
+if $output == nil
+	$output = replaceExt $source, '.asm'
+end
 
-	if File.exist? "/bin/sh"
-		terminalSpecs = `stty size`.chomp.strip
-		terminalWidth = terminalSpecs[seperatorDepth(terminalSpecs, ' ') + 1\
-		.. terminalSpecs.length].strip
-		print "\n"
-		banner = Array.new terminalWidth.to_i + 1, "="
-		banner = banner.join("")
-		banner = banner[1 .. banner.length]
-		puts banner
-	end
-	print "\n"
+#MARK: FILE MANAGMENT
+
+if !File.exists? $source
+	puts "Source file #{$source} not found!"
 	exit
 end
 
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-#=============================================================================|
-#								  INIT SCRIPT
-#=============================================================================|
-#//////////////////////////////////////////////////////////////////////////////
+$sourceFile = File.new $source, "r"
 
-print "The Literate Assembler (LASM) version #{b}.#{y}\n"
-print "Please give me a file to compile: "
-fileName = gets.chomp
-if !File.exist? fileName
-	print "I could not find #{fileName}!\n"
-	finish
+if File.exists? $output and $skip == false
+	print "Do you wish to overwrite #{$output}(y/n)? "
+	yn = $stdin.gets.chomp.strip
+	if yn != "y" and yn != "Y"
+		puts "Not overwriting."
+		exit
+	end
+	puts "Overwriting!"
+else
+	puts "Creating #{$output}!"
 end
 
-print "I am checking if #{fileName} is a LASM file...\n"
+$outputFile = File.new $output, "w"
 
-inFile = File.new fileName, "r"
-readLine = inFile.gets.chomp.gsub(/\s+/, "")
-
-while readLine == "" || readLine[0] == ';'
-	readLine = inFile.gets.chomp.gsub(/\s+/, "")
+if $logName != nil
+	$logFile = File.new $logName, "a"
+	$logFile.puts "\nWRITTEN TO BY LASM @ #{$time.hour}:#{$time.min}"
 end
 
-if readLine[0 .. 4] != '$lasm'
-	print "I did not find $lasm on the first line!\n"
-	finish
-end
+#MARK: NASM CODE GENERATION
 
-print "I have found $lasm on the first line! Almost ready...\n"
+validASM = false
 
-outFileName = "#{fileName}.asm"
-if File.exists? outFileName
-	print "The file #{outFileName} already exists! Want to overwrite(y/n)?"
-	overWrite = gets.chomp.strip
-	if overWrite != 'y' && overWrite != 'Y'
-		print "Leaving #{outFileName} untouched.\n"
-		finish
+if $assembler == "nasm" or $assembler == "nasm16" or $assembler == "nasm32"
+	setFlag "nasm"
+	validASM = true
+	def gen_addressLabel str
+		outCode = "#{str}:"
+		$outputFile.puts outCode
+		return outCode
 	end
-end
-
-outFile = File.new outFileName, "w"
-
-print "Please specify the output language(defaults to nasm): "
-outLang = gets.chomp.strip
-
-if outLang == ""
-	outLang = "nasm"
-end
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-#=============================================================================|
-#								NASM FUNCTIONS
-#=============================================================================|
-#//////////////////////////////////////////////////////////////////////////////
-if outLang == "nasm" || outLang == "nasm16" || outLang == "nasm32"
-	asmName = "NASM:\n"
-	def addressHexJump file, hex
-		file.print "	JMP [#{hex}h]\n"
-		return "	JMP [#{hex}h]\n"
+	def gen_jumpHexAddress str
+		outCode = "	JMP [0#{str}h]"
+		$outputFile.puts outCode
+		return outCode
 	end
-
-	def addressJump file, address
-		file.print "	JMP [#{address}]\n"
-		return "	JMP [#{address}]\n"
+	def gen_jumpAddress str
+		outCode = "	JMP [#{str}]"
+		$outputFile.puts outCode
+		return outCode
 	end
-
-	def literalHexJump file, hex
-		file.print "	JMP #{hex}h\n"
-		return "	JMP #{hex}h\n"
+	def gen_jumpHex str
+		outCode = "	JMP 0#{str}h"
+		$outputFile.puts outCode
+		return outCode
 	end
-
-	def literalJump file, literal
-		file.print "	JMP #{literal}\n"
-		return "	JMP #{literal}\n"
-	end
-
-	def incrementHexByte file, hex
-		file.print "	INC BYTE [#{hex}h]\n"
-		return "	INC BYTE [#{hex}h]\n"
-	end
-
-	def incrementByte file, byte
-		file.print "	INC BYTE [#{byte}]\n"
-		return "	INC BYTE [#{byte}]\n"
-	end
-
-	def addressMarker file, address
-		file.print "#{address}:\n"
-		return "#{address}:"
-	end
-
-	def byteHex file, data
-		file.print "	DB #{data}h\n"
-	end
-
-	def byte file, data
-		file.print "	DB #{data}\n"
-	end
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# Since there are a few diffrent modes that nasm can assemble in, let's define
-# a few things that would make sense with the mode////////////////////////////
-#/////////////////////////////////////////////////
-
-	if outLang == "nasm" || outLang == "nasm16"
-		outFile.print "	BITS 16\n"
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# With NASM, or really any other compiler/assembler that can generate two forms
-# of code, we should always set a base flag that tells the code that it's still
-# NASM compiling, and a flag that tells the code that there might be a few/////
-# extra features enabled//////////////////////////////////////////////////
-#///////////////////////
-
-		flags = setFlag "nasm", flags
-		flags = setFlag "nasm16", flags
-		def intHex file, data
-			file.print "	DW #{data}h\n"
-		end
-
-		def int file, data
-			file.print "	DW #{data}\n"
-		end
-		def incrementHexInt file, hex
-			file.print "	INC WORD [#{hex}h]\n"
-			return "	INC WORD [#{hex}h]\n"
-		end
-
-		def incrementInt file, int
-			file.print "	INC WORD [#{int}]\n"
-			return "	INC WORD [#{int}]\n"
-		end
-	end
-	if outLang == "nasm32"
-		outFile.print "	BITS 32"
-
-		flags = setFlag "nasm", flags
-		flags = setFlag "nasm32", flags
-		def intHex file, data
-			file.print "	DD #{data}h\n"
-		end
-
-		def int file, data
-			file.print "	DD #{data}\n"
-		end
+	def gen_jump str
+		outCode = "	JMP #{str}"
+		$outputFile.puts outCode
+		return outCode
 	end
 end
 
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-#=============================================================================|
-#								DASM FUNCTIONS
-#=============================================================================|
-#//////////////////////////////////////////////////////////////////////////////
-if outLang == "dasm"
-	asmName = "DASM:\n"
-	def addressHexJump file, hex
-		file.print "	JMP ($#{hex})\n"
-		return "	JMP ($#{hex})\n"
-	end
+#MARK: COMPILER
 
-	def addressJump file, address
-		file.print "	JMP (#{address})\n"
-		return "	JMP (#{address})\n"
-	end
+line = 0
 
-	def literalHexJump file, hex
-		file.print "	JMP $#{hex}\n"
-		return "	JMP $#{hex}\n"
-	end
-
-	def literalJump file, literal
-		file.print "	JMP #{literal}\n"
-		return "	JMP #{literal}\n"
-	end
-
-	def addressMarker file, address
-		file.print "#{address}:\n"
-		return "#{address}:\n"
-	end
-
-	def byteHex file, data
-		file.print "	HEX #{data}\n"
-	end
-
-	def byte file, data
-		file.print "	DC.B #{data}\n"
-	end
-end
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-#=============================================================================|
-#								  INIT SCRIPT
-#=============================================================================|
-#//////////////////////////////////////////////////////////////////////////////
-
-if flags.empty?
-	print "I'm sorry, \"#{outLang}\" does not match a supported assembler.\n"
-	inFile.close
-	outFile.close
-	finish
-end
-
-line = 1
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-#=============================================================================|
-#								   COMPILER
-#=============================================================================|
-#//////////////////////////////////////////////////////////////////////////////
-
-while readLine = inFile.gets
-	readLine = readLine.chomp.gsub(/\s+/, "")
+while readLine = $sourceFile.gets
+	rawLine = readLine.chomp
+	readLine = formatLine readLine
 	line += 1
-	print "LINE #{line}: #{readLine} "
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# If there's a blank line...
-#///////////////////////////
-
-	if readLine == ""
-		print "\n"
-
-#\\\\\\\\\\\\\\\\\\\\\\\\
-# If there's a comment...
-#////////////////////////
-
-	elsif readLine[0] == ';'
-		print "(comment)\n"
-
-#\\\\\\\\\\\\\\\\\\\\\\\\
-# If we're setting a flag
-#////////////////////////
-
-	elsif readLine[0 .. 4] == '$flag'
-		safeFlags = setFlag readLine[5 .. lineLength(readLine)], flags
-		if safeFlags == false
-			print "(#{readLine [5 .. lineLength(readLine)]} is already flag)\n"
+	log "LINE #{line}: #{rawLine}"
+	if readLine[0 .. 4] == '$flag'
+		flagState = setFlag readLine[5 .. readLine.length]
+		if flagState == false and $verbose == true
+			log " (#{readLine[5 .. readLine.length]\
+			} has already been flagged)"
 		else
-			flags = safeFlags
-			print "(#{readLine [5 .. lineLength(readLine)]} is now a flag)\n"
+			log " (#{readLine[5 .. readLine.length]\
+			} is now flagged!)"
 		end
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# If we're checking for a flag...
-#////////////////////////////////
-
-	elsif readLine[0 .. 2] == '$if'
-		flagSet = checkFlag readLine[3 .. lineLength(readLine)], flags
-		if flagSet == false
-			print "(flag #{readLine[3 .. lineLength(readLine)]} not set)\n"
+	elsif readLine[0 .. 5] == '$ifnot'
+		flagState = checkFlag readLine[6 .. readLine.length]
+		if flagState == true
+			log " (#{readLine[6 .. readLine.length]\
+			} has been flagged. Skipping code...)"
 			endCount = 1
 			while endCount > 0
-				readLine = inFile.gets.chomp.gsub(/\s+/, "")
-				line += 1
-				if readLine[0 .. 2] == '$if' || readLine[0 .. 2] == '$raw'
-					endCount += 1
-				elsif readLine[0 .. 3] == '$end'
-					endCount -= 1
+				readLine = $sourceFile.gets
+				if readLine == nil
+					seperate
+					$verbose = true
+					log "NO $END FOR THE $IF AT LINE #{\
+					ifStart}! ABORTING..."
+					endCount = 0
+				else
+					readLine = formatLine readLine
+					line += 1
+					markerStatus = checkMarker readLine
+					
+					if markerStatus[$MARKER] == true and\
+					markerStatus[$ENDMARKER] == false
+						
+						endCount += 1
+						
+					elsif markerStatus[$MARKER] == true\
+					and markerStatus[$ENDMARKER] == true
+						
+						endCount -= 1
+					
+					end
 				end
 			end
 		else
-			print "(flag #{readLine[3 .. lineLength(readLine)]} is set)\n"
+			log " (#{readLine[6 .. readLine.length]\
+			} has not been set.)"
 		end
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# If we're just copying raw code...
-#//////////////////////////////////
-
-	elsif readLine[0 .. 3] == '$raw'
-		endCount = 1
-		while endCount > 0
-			readLine = inFile.gets.chomp
-			line += 1
-			if readLine[0 .. 2].gsub(/\s+/, "") == '$if' || \
-			readLine[0 .. 3].gsub(/\s+/, "") == '$raw' || \
-			readLine[0 .. 3].gsub(/\s+/, "") == '$bytes'
-				endCount += 1
-			elsif readLine[0 .. 3].gsub(/\s+/, "") == '$end'
-				endCount -= 1
-			else
-				outFile.puts readLine
+	elsif readLine[0 .. 2] == '$if'
+		flagState = checkFlag readLine[3 .. readLine.length]
+		if flagState == false
+			ifStart = line
+			log " (#{readLine[3 .. readLine.length]\
+			} has not been flagged. Skipping code...)"
+			endCount = 1
+			while endCount > 0
+				readLine = $sourceFile.gets
+				if readLine == nil
+					seperate
+					$verbose = true
+					log "NO $END FOR THE $IFNOT AT LINE #{\
+					ifStart}! ABORTING..."
+					endCount = 0
+				else
+					readLine = formatLine readLine
+					line += 1
+					markerStatus = checkMarker readLine
+					
+					if markerStatus[$MARKER] == true and\
+					markerStatus[$ENDMARKER] == false
+						
+						endCount += 1
+						
+					elsif markerStatus[$MARKER] == true \
+					and markerStatus[$ENDMARKER] == true
+						
+						endCount -= 1
+					
+					end
+				end
 			end
-		end
-		print "(copied raw code to output)\n"
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# If it's just a stray $end...
-#/////////////////////////////
-
-	elsif readLine[0 .. 3] == '$end'
-		print "(end marker ignored)\n"
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# If there's a jump instruction...
-#/////////////////////////////////
-
-	elsif readLine[0 .. 3] == 'jump'
-		print asmName
-		if readLine[4 .. 5] == '@#' || readLine[4 .. 5] == '#@'
-			print addressHexJump outFile, readLine[6 .. lineLength(readLine)]
-		elsif readLine[4] == '@'
-			print addressJump outFile, readLine[5 .. lineLength(readLine)]
-		elsif readLine[4] == '#'
-			print literalHexJump outFile, readLine[5 .. lineLength(readLine)]
 		else
-			print literalJump outFile, readLine[4 .. lineLength(readLine)]
+			log " (#{readLine[3 .. readLine.length]\
+			} has been flagged.)"
 		end
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# If there's an increment instruction...
-#///////////////////////////////////////
-
-	elsif readLine[0 .. 8] == 'increment'
-		print asmName
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# If we're incrementing a byte...
-#////////////////////////////////
-
-		if readLine[9 .. 12] == 'byte'
-			if readLine[13 .. 14] == '@#' || readLine[13 .. 14] == '#@'
-				print \
-				incrementHexByte outFile, readLine[15 .. lineLength(readLine)]
-			elsif readLine[13] == '@'
-				print \
-				incrementByte outFile, readLine[14 .. lineLength(readLine)]
-			elsif readLine[13] == '#'
-				print\
-				incrementHexByte(outFile, \
-				readLine[14 .. lineLength(readLine)]).chomp
-				print "(converted to #@#{\
-				readLine[14 .. lineLength(readLine)]}. Please correct)\n"
-			else
-				print\
-				incrementByte(outFile, \
-				readLine[13 .. lineLength(readLine)]).chomp
-				print "{converted to @#{\
-				readLine[13 .. lineLength(readLine)]}. Please correct\n"
-			end
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# If we're incrementing an interger...
-#/////////////////////////////////////
-
-		else
-			if readLine[9 .. 10] == '@#' || readLine[9 .. 10] == '#@'
-				print \
-				incrementHexInt outFile, readLine[11 .. lineLength(readLine)]
-			elsif readLine[9] == '@'
-				print \
-				incrementInt outFile, readLine[10 .. lineLength(readLine)]
-			elsif readLine[9] == '#'
-				print\
-				incrementHexInt(outFile, \
-				readLine[10 .. lineLength(readLine)]).chomp
-				print "(converted to #@#{\
-				readLine[14 .. lineLength(readLine)]}. Please correct)\n"
-			else
-				print\
-				incrementInt(outFile, \
-				readLine[9 .. lineLength(readLine)]).chomp
-				print "{converted to @#{\
-				readLine[9 .. lineLength(readLine)]}. Please correct\n"
-			end
-		end
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# If we're just making a bunch of bytes...
-#/////////////////////////////////////////
-
-	elsif readLine[0 .. 5] == '$bytes'
-		print "(a bunch of bytes)\n"
+	elsif readLine[0 .. 4] == '$else'
+		log "(Nothing against $else. Skipping code...)"
+		elseStart = line
 		endCount = 1
 		while endCount > 0
-			readLine = inFile.gets.chomp.strip
-			if readLine[0 .. 2].gsub(/\s+/, "") == '$if' || \
-			readLine[0 .. 3].gsub(/\s+/, "") == '$raw' || \
-			readLine[0 .. 3].gsub(/\s+/, "") == '$bytes'
-				endCount += 1
-			elsif readLine[0 .. 3] == '$end'
-				endCount -= 1
-			elsif readLine[0] == '#'
-				byteHex outFile, readLine[1 .. lineLength(readLine)]
-			elsif readLine != ""
-				byte outFile, readLine
+			readLine = $sourceFile.gets
+			if readLine == nil
+				seperate
+				$verbose = true
+				log "NO $END FOR THE $ELSE AT LINE #{\
+				elseStart}! ABORTING..."
+				endCount = 0
+			else
+				readLine = formatLine readLine
+				line += 1
+				markerStatus = checkMarker readLine
+				
+				if markerStatus[$MARKER] == true and\
+				markerStatus[$ENDMARKER] == false
+					
+					endCount += 1
+					
+				elsif markerStatus[$MARKER] == true and\
+				markerStatus[$ENDMARKER] == true
+					
+					endCount -= 1
+				
+				end
 			end
 		end
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# If we're just making a bunch of bytes...
-#/////////////////////////////////////////
-
-	elsif readLine[0 .. 8] == '$interger'
-		print "(a bunch of number)\n"
-		endCount = 1
-		while endCount > 0
-			readLine = inFile.gets.chomp.strip
-			if readLine[0 .. 2].gsub(/\s+/, "") == '$if' || \
-			readLine[0 .. 3].gsub(/\s+/, "") == '$raw' || \
-			readLine[0 .. 5].gsub(/\s+/, "") == '$bytes' || \
-			readLine[0 .. 8].gsub(/\s+/, "") == '$interger'
-				endCount += 1
-			elsif readLine[0 .. 3] == '$end'
-				endCount -= 1
-			elsif readLine[0] == '#'
-				intHex outFile, readLine[1 .. lineLength(readLine)]
-			elsif readLine != ""
-				int outFile, readLine
-			end
-		end
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# If there's an address marker...
-#////////////////////////////////
-
 	elsif readLine[0] == ':'
-		print "(#{addressMarker outFile,\
-		readLine[1 .. lineLength(readLine)]})\n"
-
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-# If this just doesn't make sense...
-#///////////////////////////////////
-
-	else
-		print "(gibberish, ignoring)\n"
+		log " (#{gen_addressLabel readLine[1 .. readLine.length]})"
+	elsif readLine[0 .. 3] == 'jump'
+		if readLine[4 .. 5] == '@#' or readLine[4 .. 5] == '#@'
+			log gen_jumpHexAddress readLine[6 .. readLine.length]
+		elsif readLine[4] == '@'
+			log gen_jumpAddress readLine[5 .. readLine.length]
+		elsif readLine[4] == '#'
+			log gen_jumpHex readLine[5 .. readLine.length]
+		else
+			log gen_jump readLine[4 .. readLine.length]
+		end
+	elsif readLine != "" and readLine[0] != ';' and \
+	readLine[0 .. 3] != '$end'
+		log " (gibberish, ignoring)"
 	end
+	log "\n"
 end
 
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-#=============================================================================|
-#								  EXIT SCRIPT
-#=============================================================================|
-#//////////////////////////////////////////////////////////////////////////////
+#MARK: EXIT SCRIPT
 
-print "#{line} lines were compiled!\n"
-print "The flags #{flags} where flagged!\n"
-inFile.close
-outFile.close
-print "LASM is done!\n"
-finish
+$sourceFile.close
+$outputFile.close
+
+log "#{line} lines where compiled!\n"
+log "The flags #{$flags} were set!\n"
+$verbose = true
+beep
+log $done
+
+exit

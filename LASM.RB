@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-v = 3 # Version
+v = 4 # Version
 y = 2015 # Year
 #^The version
 
@@ -7,7 +7,7 @@ y = 2015 # Year
 
 #The Public File License (see https://github.com/Gip-Gip/PFL for info)
 
-#Copyright Charles "Gip-Gip" Thompson, October 13th, 2015
+#Copyright Charles "Gip-Gip" Thompson, October 14th, 2015
 
 #In this case, a file is a group of digital data that can be transferred and
 #used.
@@ -96,7 +96,7 @@ end
 
 def error str
 	$verbose = true;
-	log("ERROR @ LINE #{$line}: #{str}");
+	log("\n\n\nERROR @ LINE #{$line}: #{str}\n\n\n");
 	exit;
 end
 
@@ -227,7 +227,7 @@ def getStatementDepth str, num
 		statementCount += 1;
 	end
 	if str[stringCursor .. stringCursor + 1] == '@#' or \
-			str[stringCursor .. stringCursor + 1] == '@#'
+			str[stringCursor .. stringCursor + 1] == '#@'
 		stringCursor += 2;
 	elsif str[stringCursor] == '@' or str[stringCursor] == '#'
 		stringCursor += 1;
@@ -346,292 +346,45 @@ if $assembler == "nasm" or $assembler == "nasm16" or $assembler == "nasm32"
 		return "#{str}:";
 	end
 	def gen_jump one, two, flg
-		case flg[2]
-		when 'n'
-			case flg[0]
-			when 'n'
-				return nil;
+		code_one = nil, code_two = nil, code_op = nil;
+		case flg[0]
 			when 'b'
-				return "	JMP [#{one}h]";
+				code_one = "[#{one}h]";
 			when 'a'
-				return "	JMP [#{one}]";
+				code_one = "[#{one}]";
 			when 'h'
-				return "	JMP #{one}h";
+				code_one = "#{one}h";
 			when 'r'
-				return "	JMP #{one}";
+				code_one = "#{one}";
 			else
-				return nil;
-			end
-		when 'b'
-			case flg[1]
+				error("LONE JUMP INSTRUCTION!");
+		end
+		case flg[1]
 			when 's'
-				case flg[0]
-				when 'n'
-					return nil;
-				when 'b'
-					return \
-						"	MOV AX, [#{one}h]\n" +\
-						"	MOV BX, [#{two}h]\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				when 'a'
-					return \
-						"	MOV AX, [#{one}]\n" +\
-						"	MOV BX, [#{two}h]\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				when 'h'
-					return \
-						"	MOV AX, #{one}h\n" +\
-						"	MOV BX, [#{two}h]\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				when 'r'
-					return \
-						"	MOV AX, #{one}\n" +\
-						"	MOV BX, [#{two}h]\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				else
-					return nil;
-				end
+				code_op = "ADD";
 			when 'd'
-				case flg[0]
-				when 'n'
-					return nil;
-				when 'b'
-					return \
-						"	MOV AX, [#{one}h]\n" +\
-						"	MOV BX, [#{two}h]\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				when 'a'
-					return \
-						"	MOV AX, [#{one}]\n" +\
-						"	MOV BX, [#{two}h]\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				when 'h'
-					return \
-						"	MOV AX, #{one}h\n" +\
-						"	MOV BX, [#{two}h]\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				when 'r'
-					return \
-						"	MOV AX, #{one}\n" +\
-						"	MOV BX, [#{two}h]\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				else
-					return nil;
-				end
-			else
-				return nil;
-			end
-		when 'a'
-			case flg[1]
-			when 's'
-				case flg[0]
-				when 'n'
-					return nil;
-				when 'b'
-					return \
-						"	MOV AX, [#{one}h]\n" +\
-						"	MOV BX, [#{two}]\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				when 'a'
-					return \
-						"	MOV AX, [#{one}]\n" +\
-						"	MOV BX, [#{two}]\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				when 'h'
-					return \
-						"	MOV AX, #{one}h\n" +\
-						"	MOV BX, [#{two}]\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				when 'r'
-					return \
-						"	MOV AX, #{one}\n" +\
-						"	MOV BX, [#{two}]\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				else
-					return nil;
-				end
-			when 'd'
-				case flg[0]
-				when 'n'
-					return nil;
-				when 'b'
-					return \
-						"	MOV AX, [#{one}h]\n" +\
-						"	MOV BX, [#{two}]\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				when 'a'
-					return \
-						"	MOV AX, [#{one}]\n" +\
-						"	MOV BX, [#{two}]\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				when 'h'
-					return \
-						"	MOV AX, #{one}h\n" +\
-						"	MOV BX, [#{two}]\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				when 'r'
-					return \
-						"	MOV AX, #{one}\n" +\
-						"	MOV BX, [#{two}]\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				else
-					return nil;
-				end
-			else
-				return nil;
-			end
-		when 'h'
-			case flg[1]
-			when 's'
-				case flg[0]
-				when 'n'
-					return nil;
-				when 'b'
-					return \
-						"	MOV AX, [#{one}h]\n" +\
-						"	MOV BX, #{two}h\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				when 'a'
-					return \
-						"	MOV AX, [#{one}]\n" +\
-						"	MOV BX, #{two}h\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				when 'h'
-					return \
-						"	MOV AX, #{one}h\n" +\
-						"	MOV BX, #{two}h\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				when 'r'
-					return \
-						"	MOV AX, #{one}\n" +\
-						"	MOV BX, #{two}h\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				else
-					return nil;
-				end
-			when 'd'
-				case flg[0]
-				when 'n'
-					return nil;
-				when 'b'
-					return \
-						"	MOV AX, [#{one}h]\n" +\
-						"	MOV BX, #{two}h\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				when 'a'
-					return \
-						"	MOV AX, [#{one}]\n" +\
-						"	MOV BX, #{two}h\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				when 'h'
-					return \
-						"	MOV AX, #{one}h\n" +\
-						"	MOV BX, #{two}h\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				when 'r'
-					return \
-						"	MOV AX, #{one}\n" +\
-						"	MOV BX, #{two}h\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				else
-					return nil;
-				end
-			else
-				return nil;
-			end
-		when 'r'
-			case flg[1]
-			when 's'
-				case flg[0]
-				when 'n'
-					return nil;
-				when 'b'
-					return \
-						"	MOV AX, [#{one}h]\n" +\
-						"	MOV BX, #{two}\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				when 'a'
-					return \
-						"	MOV AX, [#{one}]\n" +\
-						"	MOV BX, #{two}\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				when 'h'
-					return \
-						"	MOV AX, #{one}h\n" +\
-						"	MOV BX, #{two}\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				when 'r'
-					return \
-						"	MOV AX, #{one}\n" +\
-						"	MOV BX, #{two}\n" +\
-						"	ADD AX, BX\n" +\
-						"	JMP AX";
-				else
-					return nil;
-				end
-			when 'd'
-				case flg[0]
-				when 'n'
-					return nil;
-				when 'b'
-					return \
-						"	MOV AX, [#{one}h]\n" +\
-						"	MOV BX, #{two}\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				when 'a'
-					return \
-						"	MOV AX, [#{one}]\n" +\
-						"	MOV BX, #{two}\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				when 'h'
-					return \
-						"	MOV AX, #{one}h\n" +\
-						"	MOV BX, #{two}\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				when 'r'
-					return \
-						"	MOV AX, #{one}\n" +\
-						"	MOV BX, #{two}\n" +\
-						"	SUB AX, BX\n" +\
-						"	JMP AX";
-				else
-					return nil;
-				end
-			else
-				return nil;
-			end
+				code_op = "SUB";
+		end
+		case flg[2]
+			when 'b'
+				code_two = "[#{two}h]";
+			when 'a'
+				code_two = "[#{two}]";
+			when 'h'
+				code_two = "#{two}h";
+			when 'r'
+				code_two = "#{two}";
+		end
+		if code_two == nil and code_op != nil
+			error("STRAY OPERATOR!");
+		elsif code_op == nil and code_two != nil
+			error("INVALID OPERATOR!");
+		elsif code_two == nil
+			return "	JMP #{code_one}";
 		else
-			return nil;
+			return "	MOV AX, #{code_one}\n" + \
+				"	#{code_op} AX, #{code_two}\n" + \
+				"	JMP AX\n";
 		end
 	end
 end
